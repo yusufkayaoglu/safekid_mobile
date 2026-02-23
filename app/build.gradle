@@ -1,0 +1,94 @@
+import java.util.Properties
+
+plugins {
+    alias(libs.plugins.android.application)
+    id 'com.google.dagger.hilt.android'
+}
+
+// local.properties'den API key'i oku
+def localProps = new Properties()
+def localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
+android {
+    namespace "com.safekid.mobile"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.safekid.mobile"
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Maps API key'ini manifest placeholder olarak tanımla
+        manifestPlaceholders["MAPS_API_KEY"] =
+                localProps.getProperty("MAPS_API_KEY", "")
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles 'proguard-android-optimize.txt', 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    buildFeatures {
+        viewBinding true
+    }
+
+}
+
+dependencies {
+    implementation libs.appcompat
+    implementation libs.material
+    implementation libs.activity
+    implementation libs.constraintlayout
+
+    // Retrofit + OkHttp
+    implementation 'com.squareup.retrofit2:retrofit:2.11.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.11.0'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
+    implementation 'com.squareup.okhttp3:okhttp-sse:4.12.0'
+
+    // ViewModel + LiveData
+    implementation 'androidx.lifecycle:lifecycle-viewmodel:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-livedata:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-runtime:2.8.7'
+
+    // Fragment
+    implementation 'androidx.fragment:fragment:1.8.5'
+
+    // RecyclerView + CardView + SwipeRefresh
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    implementation 'androidx.cardview:cardview:1.0.0'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+
+    // Google Maps + Location
+    implementation 'com.google.android.gms:play-services-maps:19.0.0'
+    implementation 'com.google.android.gms:play-services-location:21.3.0'
+
+    // ZXing QR Code
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+
+    // Hilt (DI)
+    implementation 'com.google.dagger:hilt-android:2.51.1'
+    annotationProcessor 'com.google.dagger:hilt-android-compiler:2.51.1'
+
+    // WorkManager + Hilt-Work integration
+    implementation 'androidx.work:work-runtime:2.9.1'
+    implementation 'androidx.hilt:hilt-work:1.2.0'
+    annotationProcessor 'androidx.hilt:hilt-compiler:1.2.0'
+
+    testImplementation libs.junit
+    androidTestImplementation libs.ext.junit
+    androidTestImplementation libs.espresso.core
+}

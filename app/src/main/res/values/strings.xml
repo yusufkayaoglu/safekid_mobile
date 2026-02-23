@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">SafeKid</string>
+    <string name="notification_channel_name">Konum Servisi</string>
+    <string name="notification_channel_desc">Arka planda konum gönderimi</string>
+    <string name="notification_title">SafeKid Aktif</string>
+    <string name="notification_text">Konumunuz gönderiliyor...</string>
+</resources>

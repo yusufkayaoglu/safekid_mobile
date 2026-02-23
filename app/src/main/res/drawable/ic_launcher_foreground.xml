@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- White shield -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,20 L84,33 L84,62 C84,78 70,87 54,90 C38,87 24,78 24,62 L24,33 Z" />
+
+    <!-- Blue child head (circle) -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M54,43 m-9,0 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0" />
+
+    <!-- Blue child body (rounded rectangle) -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M47,56 L61,56 Q65,56 65,60 L65,74 Q65,78 61,78 L47,78 Q43,78 43,74 L43,60 Q43,56 47,56 Z" />
+
+</vector>
