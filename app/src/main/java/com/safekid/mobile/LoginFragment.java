@@ -11,14 +11,17 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.safekid.mobile.databinding.FragmentLoginBinding;
 import com.safekid.mobile.session.SessionManager;
 import com.safekid.mobile.viewmodel.AuthViewModel;
+import com.safekid.mobile.viewmodel.ParentViewModel;
 
 public class LoginFragment extends Fragment {
 
     private FragmentLoginBinding binding;
     private AuthViewModel viewModel;
+    private ParentViewModel parentViewModel;
     private SessionManager session;
 
     @Nullable
@@ -35,6 +38,7 @@ public class LoginFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         viewModel = new ViewModelProvider(requireActivity()).get(AuthViewModel.class);
+        parentViewModel = new ViewModelProvider(requireActivity()).get(ParentViewModel.class);
         session = new SessionManager(requireContext());
 
         observeViewModel();
@@ -54,8 +58,14 @@ public class LoginFragment extends Fragment {
             viewModel.clearLoginResult();
             session.saveLogin(res.accessToken, res.expiresAt,
                     res.ebeveynUniqueId, res.ebeveynAdi, res.ebeveynSoyadi);
+            parentViewModel.refreshApiClient();
             Toast.makeText(requireContext(),
                     "Hoşgeldin " + res.ebeveynAdi, Toast.LENGTH_SHORT).show();
+            FirebaseMessaging.getInstance().getToken()
+                    .addOnSuccessListener(fcmToken -> {
+                        session.saveFcmToken(fcmToken);
+                        parentViewModel.updateFcmToken(fcmToken);
+                    });
             ((MainActivity) requireActivity()).navigateToParentHome();
         });
 

@@ -20,8 +20,8 @@ import com.google.gson.annotations.SerializedName;
  */
 public class GeofenceBreachEvent {
 
-    @SerializedName("type")
-    public String type;       // "GEOFENCE_BREACH"
+    @SerializedName("tip")
+    public String type;       // "GEOFENCE_BREACH" — backend "tip" alanı olarak gönderir
 
     @SerializedName("cocukId")
     public String cocukId;

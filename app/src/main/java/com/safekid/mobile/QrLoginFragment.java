@@ -20,8 +20,15 @@ import androidx.lifecycle.ViewModelProvider;
 import com.journeyapps.barcodescanner.ScanContract;
 import com.journeyapps.barcodescanner.ScanOptions;
 import com.safekid.mobile.databinding.FragmentQrLoginBinding;
+import com.safekid.mobile.network.ApiClient;
+import com.safekid.mobile.network.ParentApi;
+import com.safekid.mobile.network.dto.FcmTokenRequest;
 import com.safekid.mobile.session.SessionManager;
 import com.safekid.mobile.viewmodel.AuthViewModel;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class QrLoginFragment extends Fragment {
 
@@ -82,6 +89,34 @@ public class QrLoginFragment extends Fragment {
 
         viewModel.getQrLoginResult().observe(getViewLifecycleOwner(), res -> {
             if (res == null) return;
+            viewModel.clearQrLoginResult();
+
+            // Bu cihaz daha önce ebeveyn olarak kullanıldıysa FCM token'ını backend'den sil.
+            // Aksi hâlde backend bu cihazı hâlâ ebeveyn cihazı sanır ve
+            // geofence ihlali bildirimlerini buraya gönderir.
+            if (session.isParent()) {
+                String parentJwt = session.getToken();
+                if (parentJwt != null) {
+                    ApiClient.getAuthInstance(parentJwt)
+                            .create(ParentApi.class)
+                            .updateFcmToken(new FcmTokenRequest(""))
+                            .enqueue(new Callback<Void>() {
+                                @Override
+                                public void onResponse(@NonNull Call<Void> call,
+                                                       @NonNull Response<Void> r) {
+                                    android.util.Log.d("FCM",
+                                            "Ebeveyn FCM token temizlendi (cihaz çocuk moduna geçti)");
+                                }
+                                @Override
+                                public void onFailure(@NonNull Call<Void> call,
+                                                      @NonNull Throwable t) {
+                                    android.util.Log.w("FCM",
+                                            "FCM token temizlenemedi: " + t.getMessage());
+                                }
+                            });
+                }
+            }
+
             // Çocuk girişi — CHILD token kaydediliyor
             session.saveChildLogin(res.accessToken, res.expiresAt,
                     res.ebeveynUniqueId, res.ebeveynAdi, res.ebeveynSoyadi);

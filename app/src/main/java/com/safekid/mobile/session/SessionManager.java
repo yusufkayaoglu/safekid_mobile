@@ -14,6 +14,10 @@ public class SessionManager {
     private static final String KEY_PARENT_NAME = "parent_name";
     private static final String KEY_PARENT_SURNAME = "parent_surname";
     private static final String KEY_ROLE = "role";
+    private static final String KEY_FCM_TOKEN = "fcm_token";
+    private static final String KEY_IS_PREMIUM = "is_premium";
+    private static final String KEY_SUBSCRIPTION_TYPE = "subscription_type";
+    private static final String KEY_SUBSCRIPTION_EXPIRES_AT = "subscription_expires_at";
 
     public static final String ROLE_PARENT = "PARENT";
     public static final String ROLE_CHILD = "CHILD";
@@ -84,6 +88,46 @@ public class SessionManager {
 
     public String getRole() {
         return prefs.getString(KEY_ROLE, null);
+    }
+
+    public void saveFcmToken(String token) {
+        prefs.edit().putString(KEY_FCM_TOKEN, token).apply();
+    }
+
+    public String getFcmToken() {
+        return prefs.getString(KEY_FCM_TOKEN, null);
+    }
+
+    // ── Premium / Subscription ────────────────────────────────────────────────
+
+    public void savePremiumStatus(boolean isPremium, String subscriptionType, String expiresAt) {
+        prefs.edit()
+                .putBoolean(KEY_IS_PREMIUM, isPremium)
+                .putString(KEY_SUBSCRIPTION_TYPE, subscriptionType)
+                .putString(KEY_SUBSCRIPTION_EXPIRES_AT, expiresAt)
+                .apply();
+    }
+
+    public boolean isPremium() {
+        return prefs.getBoolean(KEY_IS_PREMIUM, false);
+    }
+
+    public String getSubscriptionType() {
+        return prefs.getString(KEY_SUBSCRIPTION_TYPE, "FREE");
+    }
+
+    public String getSubscriptionExpiresAt() {
+        return prefs.getString(KEY_SUBSCRIPTION_EXPIRES_AT, null);
+    }
+
+    private static final String KEY_LAST_LOCATION_SENT_AT = "last_location_sent_at";
+
+    public void saveLastLocationSentAt(long timestampMillis) {
+        prefs.edit().putLong(KEY_LAST_LOCATION_SENT_AT, timestampMillis).apply();
+    }
+
+    public long getLastLocationSentAt() {
+        return prefs.getLong(KEY_LAST_LOCATION_SENT_AT, 0L);
     }
 
     // ── State checks ──────────────────────────────────────────────────────────

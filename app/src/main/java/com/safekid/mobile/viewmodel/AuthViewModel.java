@@ -41,7 +41,8 @@ public class AuthViewModel extends AndroidViewModel {
 
     public LiveData<LoginResponse> getLoginResult()   { return loginResult; }
     public LiveData<LoginResponse> getQrLoginResult() { return qrLoginResult; }
-    public void clearLoginResult() { loginResult.setValue(null); }
+    public void clearLoginResult()   { loginResult.setValue(null); }
+    public void clearQrLoginResult() { qrLoginResult.setValue(null); }
     public void clearOperationSuccess() { operationSuccess.setValue(null); }
     public LiveData<Boolean> getRegisterSuccess()  { return registerSuccess; }
     public LiveData<Boolean> getVerifySuccess()    { return verifySuccess; }

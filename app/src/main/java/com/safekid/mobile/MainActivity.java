@@ -8,7 +8,10 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
+import android.widget.Toast;
+
 import com.safekid.mobile.databinding.ActivityMainBinding;
+import com.safekid.mobile.network.ApiClient;
 import com.safekid.mobile.session.SessionManager;
 
 public class MainActivity extends AppCompatActivity {
@@ -24,6 +27,7 @@ public class MainActivity extends AppCompatActivity {
 
         sessionManager = new SessionManager(this);
         setupBottomNav();
+        setupUnauthorizedHandler();
 
         if (savedInstanceState == null) {
             if (sessionManager.isLoggedIn()) {
@@ -38,6 +42,18 @@ public class MainActivity extends AppCompatActivity {
                 navigateToLogin();
             }
         }
+    }
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
+
+    private void setupUnauthorizedHandler() {
+        ApiClient.setOnUnauthorizedListener(() -> runOnUiThread(() -> {
+            sessionManager.clear();
+            Toast.makeText(this,
+                    "Oturumunuz sona erdi, lütfen tekrar giriş yapın",
+                    Toast.LENGTH_LONG).show();
+            navigateToLogin();
+        }));
     }
 
     // ── Bottom Navigation ─────────────────────────────────────────────────────

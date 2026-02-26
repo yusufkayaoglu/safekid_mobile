@@ -137,6 +137,7 @@ public class LocationWorker extends Worker {
 
             if (response.isSuccessful()) {
                 Log.d(TAG, "Konum gönderildi: " + lat + ", " + lng);
+                sessionManager.saveLastLocationSentAt(System.currentTimeMillis());
             } else {
                 Log.e(TAG, "Sunucu hatası: " + response.code());
             }
@@ -161,8 +162,11 @@ public class LocationWorker extends Worker {
                 .setConstraints(constraints)
                 .build();
 
+        // APPEND_OR_REPLACE: doWork() içinden (RUNNING state) çağrıldığında
+        // KEEP politikası yeni isteği reddeder ve zinciri koparır.
+        // APPEND_OR_REPLACE ise mevcut iş bitince sıraya alır.
         WorkManager.getInstance(context)
-                .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request);
+                .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request);
     }
 
     /**

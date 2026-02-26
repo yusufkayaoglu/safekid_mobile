@@ -29,21 +29,18 @@ public class ChildDetailFragment extends Fragment implements OnMapReadyCallback 
 
     private static final String ARG_CHILD_ID   = "child_id";
     private static final String ARG_CHILD_NAME = "child_name";
-    private static final String ARG_CHILD_MAIL = "child_mail";
 
     private FragmentChildDetailBinding binding;
     private ParentViewModel viewModel;
     private String childId;
     private String childName;
-    private String childMail;
     private GoogleMap miniMap;
 
-    public static ChildDetailFragment newInstance(String id, String name, String mail) {
+    public static ChildDetailFragment newInstance(String id, String name) {
         ChildDetailFragment f = new ChildDetailFragment();
         Bundle args = new Bundle();
         args.putString(ARG_CHILD_ID, id);
         args.putString(ARG_CHILD_NAME, name);
-        args.putString(ARG_CHILD_MAIL, mail);
         f.setArguments(args);
         return f;
     }
@@ -54,7 +51,6 @@ public class ChildDetailFragment extends Fragment implements OnMapReadyCallback 
         if (getArguments() != null) {
             childId   = getArguments().getString(ARG_CHILD_ID, "");
             childName = getArguments().getString(ARG_CHILD_NAME, "");
-            childMail = getArguments().getString(ARG_CHILD_MAIL, "");
         }
     }
 
@@ -79,7 +75,6 @@ public class ChildDetailFragment extends Fragment implements OnMapReadyCallback 
 
         // Bilgi
         binding.tvChildName.setText(childName);
-        binding.tvChildMail.setText(childMail != null ? childMail : "-");
 
         // QR Kod oluştur
         generateQrCode(childId);
@@ -120,8 +115,9 @@ public class ChildDetailFragment extends Fragment implements OnMapReadyCallback 
 
         viewModel.getDeleteSuccess().observe(getViewLifecycleOwner(), ok -> {
             if (ok != null && ok) {
-                Toast.makeText(requireContext(), "Çocuk silindi", Toast.LENGTH_SHORT).show();
-                viewModel.loadChildren();
+                viewModel.clearDeleteSuccess();
+                Toast.makeText(requireActivity().getApplicationContext(),
+                        "Çocuk silindi", Toast.LENGTH_SHORT).show();
                 requireActivity().getSupportFragmentManager().popBackStack();
             }
         });

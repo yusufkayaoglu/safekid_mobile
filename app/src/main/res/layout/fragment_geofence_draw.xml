@@ -134,6 +134,19 @@
 
         </LinearLayout>
 
+        <!-- Bölge Sil -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDeleteZone"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="8dp"
+            android:layout_marginBottom="4dp"
+            android:text="Bölge Sil"
+            app:icon="@android:drawable/ic_menu_delete"
+            app:strokeColor="@color/error_color"
+            android:textColor="@color/error_color" />
+
         <!-- Kaydet butonu + progress -->
         <FrameLayout
             android:layout_width="match_parent"

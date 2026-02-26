@@ -93,38 +93,12 @@
             android:layout_marginTop="12dp"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
             <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etTelefon"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="Cep Telefonu"
-                android:inputType="phone" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
-            <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etAdres"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Adres"
                 android:inputType="textMultiLine"
                 android:lines="2" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etEvTelefon"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="Ev Telefonu (opsiyonel)"
-                android:inputType="phone" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.textfield.TextInputLayout

@@ -7,6 +7,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -31,7 +32,10 @@ import com.safekid.mobile.viewmodel.ParentViewModel;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Ebeveynin Google Maps üzerinde polygon çizerek güvenli bölge oluşturduğu ekran.
@@ -55,6 +59,7 @@ public class GeofenceDrawFragment extends Fragment implements OnMapReadyCallback
 
     private FragmentGeofenceDrawBinding binding;
     private ParentViewModel viewModel;
+    private com.safekid.mobile.session.SessionManager session;
     private GoogleMap googleMap;
 
     private String childId;
@@ -72,7 +77,10 @@ public class GeofenceDrawFragment extends Fragment implements OnMapReadyCallback
     private Polyline closingLine;          // son noktadan ilk noktaya kapanma çizgisi
     private final List<Marker> pointMarkers = new ArrayList<>();
     // Mevcut (kayıtlı) bölgeler
-    private final List<Polygon> savedPolygons = new ArrayList<>();
+    private final Map<Long, Polygon> savedPolygons = new HashMap<>();
+
+    // "Temizle" sonrası LiveData yeniden tetiklenirse polygon'ları yeniden çizme
+    private boolean savedZonesCleared = false;
 
     private boolean drawingMode = false;
 
@@ -117,10 +125,35 @@ public class GeofenceDrawFragment extends Fragment implements OnMapReadyCallback
         }
 
         viewModel = new ViewModelProvider(requireActivity()).get(ParentViewModel.class);
+        session = new com.safekid.mobile.session.SessionManager(requireContext());
+
+        // Premium gate — geofence sadece Premium kullanıcılara açık
+        if (!session.isPremium()) {
+            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle("Premium Özellik")
+                    .setMessage("Güvenli Bölge oluşturma yalnızca Premium üyelere açıktır.")
+                    .setPositiveButton("Premium'a Geç", (d, w) -> {
+                        requireActivity().getSupportFragmentManager().popBackStack();
+                        ((MainActivity) requireActivity()).loadFragment(new PremiumFragment(), true);
+                    })
+                    .setNegativeButton("İptal", (d, w) ->
+                            requireActivity().getSupportFragmentManager().popBackStack())
+                    .setCancelable(false)
+                    .show();
+            return;
+        }
 
         binding.toolbar.setTitle(childName + " — Güvenli Bölge");
-        binding.toolbar.setNavigationOnClickListener(v ->
-                ((MainActivity) requireActivity()).navigateToParentHome());
+        binding.toolbar.setNavigationOnClickListener(v -> handleBack());
+
+        requireActivity().getOnBackPressedDispatcher().addCallback(
+                getViewLifecycleOwner(),
+                new OnBackPressedCallback(true) {
+                    @Override
+                    public void handleOnBackPressed() {
+                        handleBack();
+                    }
+                });
 
         setupButtons();
         observeViewModel();
@@ -148,6 +181,8 @@ public class GeofenceDrawFragment extends Fragment implements OnMapReadyCallback
                     .setNegativeButton("Vazgeç", null)
                     .show();
         });
+
+        binding.btnDeleteZone.setOnClickListener(v -> showDeleteZoneDialog());
 
         binding.btnSave.setOnClickListener(v -> saveGeofence());
     }
@@ -178,12 +213,33 @@ public class GeofenceDrawFragment extends Fragment implements OnMapReadyCallback
     }
 
     private void clearAll() {
+
         points.clear();
-        // Sadece polygon noktalarını kaldır — çocuk location marker'ına dokunma
+
         for (Marker m : pointMarkers) m.remove();
         pointMarkers.clear();
-        if (activePolygon != null) { activePolygon.remove(); activePolygon = null; }
-        if (closingLine != null)   { closingLine.remove(); closingLine = null; }
+
+        if (activePolygon != null) {
+            activePolygon.remove();
+            activePolygon = null;
+        }
+
+        if (closingLine != null) {
+            closingLine.remove();
+            closingLine = null;
+        }
+
+        // Flag'i EN ÖNCE set et — aynı anda tetiklenebilecek drawSavedZones'u blokla
+        savedZonesCleared = true;
+        // ViewModel'deki LiveData'yı da sıfırla — sticky re-delivery'de null gelir, çizilmez
+        viewModel.clearGeofences();
+
+        // Kayıtlı (mavi) polygon'ları haritadan kaldır
+        for (Polygon p : savedPolygons.values()) {
+            p.remove();
+        }
+        savedPolygons.clear();
+
         updatePointCount();
     }
 
@@ -226,6 +282,12 @@ public class GeofenceDrawFragment extends Fragment implements OnMapReadyCallback
         });
 
         viewModel.getGeofences().observe(getViewLifecycleOwner(), this::drawSavedZones);
+
+        viewModel.getDeleteSuccess().observe(getViewLifecycleOwner(), success -> {
+            if (!Boolean.TRUE.equals(success)) return;
+            viewModel.clearDeleteSuccess();
+            Toast.makeText(requireContext(), "Bölge silindi", Toast.LENGTH_SHORT).show();
+        });
 
         viewModel.isLoading().observe(getViewLifecycleOwner(), loading -> {
             binding.btnSave.setEnabled(!Boolean.TRUE.equals(loading));
@@ -333,25 +395,123 @@ public class GeofenceDrawFragment extends Fragment implements OnMapReadyCallback
     }
 
     /** Sunucudan gelen kayıtlı bölgeleri mavi renkte haritada göster */
-    private void drawSavedZones(List<GeofenceDto> zones) {
-        if (googleMap == null || zones == null) return;
-        for (Polygon p : savedPolygons) p.remove();
-        savedPolygons.clear();
 
+    private void drawSavedZones(List<GeofenceDto> zones) {
+
+        if (googleMap == null) return;
+
+        // "Temizle" sonrası: flag veya null veri → haritayı temizle, çizme
+        if (savedZonesCleared || zones == null) {
+            for (Polygon p : savedPolygons.values()) p.remove();
+            savedPolygons.clear();
+            return;
+        }
+
+        // 🔥 1) SERVERDA OLMAYAN POLYGONLARI SİL
+        List<Long> incomingIds = new ArrayList<>();
+
+        if (zones != null) {
+            for (GeofenceDto z : zones) {
+                incomingIds.add(z.id);
+            }
+        }
+
+        Iterator<Map.Entry<Long, Polygon>> it = savedPolygons.entrySet().iterator();
+
+        while (it.hasNext()) {
+            Map.Entry<Long, Polygon> entry = it.next();
+
+            if (!incomingIds.contains(entry.getKey())) {
+                entry.getValue().remove();
+                it.remove();
+            }
+        }
+
+        if (zones == null) return;
+
+        // 🔵 2) POLYGONLARI GÜNCELLE (🔥 ESKİYİ REMOVE ET, YENİYİ ÇİZ)
         for (GeofenceDto zone : zones) {
-            if (zone.koordinatlar == null || zone.koordinatlar.size() < 3) continue;
+
+            if (zone.koordinatlar == null || zone.koordinatlar.size() < 3)
+                continue;
+
+            // 🔥 EĞER VARSA ÖNCE ESKİYİ SİL
+            if (savedPolygons.containsKey(zone.id)) {
+                savedPolygons.get(zone.id).remove();
+                savedPolygons.remove(zone.id);
+            }
+
             List<LatLng> pts = new ArrayList<>();
+
             for (List<Double> coord : zone.koordinatlar) {
-                // koordinatlar [lng, lat] → LatLng(lat, lng)
                 pts.add(new LatLng(coord.get(1), coord.get(0)));
             }
-            Polygon poly = googleMap.addPolygon(new PolygonOptions()
-                    .addAll(pts)
-                    .strokeColor(Color.BLUE)
-                    .strokeWidth(3)
-                    .fillColor(Color.argb(30, 0, 80, 255)));
+
+            Polygon poly = googleMap.addPolygon(
+                    new PolygonOptions()
+                            .addAll(pts)
+                            .strokeColor(Color.BLUE)
+                            .strokeWidth(3)
+                            .fillColor(Color.argb(30, 0, 80, 255))
+            );
+
             poly.setTag(zone.alanAdi);
-            savedPolygons.add(poly);
+
+            savedPolygons.put(zone.id, poly);
+        }
+    }
+    /**
+     * Kayıtlı bölgeler arasından seçim yaparak silmeyi sağlar.
+     * Seçim sonrası onay dialogu → backend'den siler, haritayı günceller.
+     */
+    private void showDeleteZoneDialog() {
+        List<GeofenceDto> zones = viewModel.getGeofences().getValue();
+
+        if (zones == null || zones.isEmpty()) {
+            Toast.makeText(requireContext(),
+                    "Silinecek kayıtlı bölge yok", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String[] names = new String[zones.size()];
+        for (int i = 0; i < zones.size(); i++) {
+            names[i] = zones.get(i).alanAdi;
+        }
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Hangi bölge silinsin?")
+                .setItems(names, (dialog, which) -> {
+                    GeofenceDto selected = zones.get(which);
+                    new AlertDialog.Builder(requireContext())
+                            .setTitle("Bölgeyi Sil")
+                            .setMessage("\"" + selected.alanAdi + "\" kalıcı olarak silinsin mi?")
+                            .setPositiveButton("Sil", (d, w) -> {
+                                // Silme sonrası drawSavedZones haritayı güncelleyebilsin
+                                savedZonesCleared = false;
+                                viewModel.deleteGeofence(selected.id, childId);
+                            })
+                            .setNegativeButton("Vazgeç", null)
+                            .show();
+                })
+                .setNegativeButton("Vazgeç", null)
+                .show();
+    }
+
+    /**
+     * Toolbar geri oku veya sistem geri tuşuna basıldığında çağrılır.
+     * Çizilmiş kaydedilmemiş nokta varsa onay dialogu gösterir.
+     */
+    private void handleBack() {
+        if (!points.isEmpty()) {
+            new AlertDialog.Builder(requireContext())
+                    .setTitle("Çıkmak istiyor musunuz?")
+                    .setMessage("Çizilen " + points.size() + " nokta kaydedilmedi. Çıkarsanız kaybolur.")
+                    .setPositiveButton("Çık", (d, w) ->
+                            ((MainActivity) requireActivity()).navigateToParentHome())
+                    .setNegativeButton("İptal", null)
+                    .show();
+        } else {
+            ((MainActivity) requireActivity()).navigateToParentHome();
         }
     }
 

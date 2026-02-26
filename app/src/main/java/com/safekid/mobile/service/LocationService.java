@@ -10,12 +10,15 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.os.IBinder;
 import android.os.Looper;
+
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
+
+import com.safekid.mobile.session.SessionManager;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -114,11 +117,10 @@ public class LocationService extends Service {
             }
         };
 
-        // 🔥 Stabil çözüm — MainLooper kullan
         fusedClient.requestLocationUpdates(
                 request,
                 locationCallback,
-                null
+                Looper.getMainLooper()
         );
     }
 
@@ -136,6 +138,8 @@ public class LocationService extends Service {
                                    @NonNull Response<LocationDto> response) {
                 if (response.isSuccessful()) {
                     Log.d("LocationService", "Konum gönderildi: " + req.lat + ", " + req.lng);
+                    new SessionManager(LocationService.this)
+                            .saveLastLocationSentAt(System.currentTimeMillis());
                 } else {
                     Log.e("LocationService", "Sunucu hatası: " + response.code());
                 }

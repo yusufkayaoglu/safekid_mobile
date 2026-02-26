@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "691079437375",
+    "project_id": "safekid-16d83",
+    "storage_bucket": "safekid-16d83.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:691079437375:android:b218f8eef80288c1a72c8a",
+        "android_client_info": {
+          "package_name": "com.safekid.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyATFFmiXGjEQn2gbSJALukUpwOs7leduWo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

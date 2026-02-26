@@ -6,8 +6,6 @@ public class RegisterRequest {
     public String ebeveynUserCode;
     public String ebeveynPassword;
     public String ebeveynMailAdres;
-    public String ebeveynTelefonNumarasi;
     public String ebeveynAdres;
-    public String ebeveynEvTelefonNumarasi;
     public String ebeveynIsAdresi;
 }

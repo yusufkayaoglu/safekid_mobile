@@ -13,12 +13,16 @@ import androidx.lifecycle.ViewModelProvider;
 
 import com.safekid.mobile.databinding.FragmentAddChildBinding;
 import com.safekid.mobile.network.dto.ChildDto;
+import com.safekid.mobile.session.SessionManager;
 import com.safekid.mobile.viewmodel.ParentViewModel;
+
+import java.util.List;
 
 public class AddChildFragment extends Fragment {
 
     private FragmentAddChildBinding binding;
     private ParentViewModel viewModel;
+    private SessionManager session;
 
     @Nullable
     @Override
@@ -34,6 +38,7 @@ public class AddChildFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         viewModel = new ViewModelProvider(requireActivity()).get(ParentViewModel.class);
+        session = new SessionManager(requireContext());
 
         binding.toolbar.setNavigationOnClickListener(v ->
                 requireActivity().getSupportFragmentManager().popBackStack());
@@ -55,7 +60,7 @@ public class AddChildFragment extends Fragment {
                     child.getFullName() + " eklendi!", Toast.LENGTH_SHORT).show();
             viewModel.loadChildren();
             ChildDetailFragment detail = ChildDetailFragment.newInstance(
-                    child.cocukUniqueId, child.getFullName(), child.cocukMail);
+                    child.cocukUniqueId, child.getFullName());
             ((MainActivity) requireActivity()).loadFragment(detail, true);
         });
 
@@ -68,15 +73,36 @@ public class AddChildFragment extends Fragment {
         binding.btnSave.setOnClickListener(v -> {
             String adi = text(binding.etCocukAdi);
             String soyadi = text(binding.etCocukSoyadi);
-            String telefon = text(binding.etCocukTelefon);
-            String mail = text(binding.etCocukMail);
 
             if (adi.isEmpty() || soyadi.isEmpty()) {
                 Toast.makeText(requireContext(), "Ad ve soyad zorunlu", Toast.LENGTH_SHORT).show();
                 return;
             }
-            viewModel.addChild(adi, soyadi, telefon, mail);
+
+            // Ücretsiz kullanıcılar maksimum 1 çocuk ekleyebilir
+            if (!session.isPremium()) {
+                List<com.safekid.mobile.network.dto.ChildDto> current =
+                        viewModel.getChildren().getValue();
+                if (current != null && current.size() >= 1) {
+                    showPremiumRequired(
+                            "Ücretsiz planda yalnızca 1 çocuk ekleyebilirsiniz.",
+                            "Sınırsız çocuk eklemek için Premium'a geçin.");
+                    return;
+                }
+            }
+
+            viewModel.addChild(adi, soyadi);
         });
+    }
+
+    private void showPremiumRequired(String message, String detail) {
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("Premium Gerekli")
+                .setMessage(message + "\n\n" + detail)
+                .setPositiveButton("Premium'a Geç", (d, w) ->
+                        ((MainActivity) requireActivity()).loadFragment(new PremiumFragment(), true))
+                .setNegativeButton("İptal", null)
+                .show();
     }
 
     private String text(com.google.android.material.textfield.TextInputEditText et) {

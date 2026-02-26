@@ -9,7 +9,11 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.safekid.mobile.network.ApiClient;
 import com.safekid.mobile.network.ParentApi;
+import android.util.Log;
+
 import com.safekid.mobile.network.dto.AddChildRequest;
+import com.safekid.mobile.network.dto.SubscriptionStatusDto;
+import com.safekid.mobile.network.dto.VerifyPurchaseRequest;
 import com.safekid.mobile.network.dto.AiChatRequest;
 import com.safekid.mobile.network.dto.AiChatResponse;
 import com.safekid.mobile.network.dto.AlertDto;
@@ -18,6 +22,7 @@ import com.safekid.mobile.network.dto.ChildDto;
 import com.safekid.mobile.network.dto.CocukIdRequest;
 import com.safekid.mobile.network.dto.DailySummaryRequest;
 import com.safekid.mobile.network.dto.DailySummaryResponse;
+import com.safekid.mobile.network.dto.FcmTokenRequest;
 import com.safekid.mobile.network.dto.GeofenceDto;
 import com.safekid.mobile.network.dto.LocationDto;
 import com.safekid.mobile.network.dto.MapChildDto;
@@ -53,6 +58,9 @@ public class ParentViewModel extends AndroidViewModel {
     private final MutableLiveData<List<GeofenceDto>> geofences = new MutableLiveData<>();
     private final MutableLiveData<GeofenceDto> savedGeofence = new MutableLiveData<>();
 
+    // ── Subscription ──────────────────────────────────────────────────────────
+    private final MutableLiveData<SubscriptionStatusDto> subscriptionStatus = new MutableLiveData<>();
+
     public ParentViewModel(@NonNull Application application) {
         super(application);
         session = new SessionManager(application);
@@ -78,6 +86,7 @@ public class ParentViewModel extends AndroidViewModel {
     public LiveData<AnomalyCheckResponse> getAnomalyCheck() { return anomalyCheck; }
     public LiveData<DailySummaryResponse> getDailySummary() { return dailySummary; }
     public LiveData<Boolean> getDeleteSuccess() { return deleteSuccess; }
+    public void clearDeleteSuccess() { deleteSuccess.setValue(null); }
     public LiveData<String> getError() { return error; }
     public LiveData<Boolean> isLoading() { return loading; }
 
@@ -85,6 +94,83 @@ public class ParentViewModel extends AndroidViewModel {
     public LiveData<List<GeofenceDto>> getGeofences() { return geofences; }
     public LiveData<GeofenceDto> getSavedGeofence() { return savedGeofence; }
     public void clearSavedGeofence() { savedGeofence.setValue(null); }
+    /** "Temizle" sonrası LiveData'yı sıfırlar — sticky re-delivery ile polygon geri gelmez. */
+    public void clearGeofences() { geofences.setValue(null); }
+
+    // Subscription LiveData
+    public LiveData<SubscriptionStatusDto> getSubscriptionStatus() { return subscriptionStatus; }
+
+    // ── Subscription ──────────────────────────────────────────────────────────
+
+    public void loadSubscriptionStatus() {
+        parentApi.getSubscriptionStatus().enqueue(new Callback<SubscriptionStatusDto>() {
+            @Override
+            public void onResponse(@NonNull Call<SubscriptionStatusDto> call,
+                                   @NonNull Response<SubscriptionStatusDto> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    SubscriptionStatusDto status = response.body();
+                    session.savePremiumStatus(
+                            status.premium,
+                            status.subscriptionType,
+                            status.expiresAt);
+                    subscriptionStatus.postValue(status);
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<SubscriptionStatusDto> call, @NonNull Throwable t) {
+                Log.e("Subscription", "Abonelik durumu alınamadı: " + t.getMessage());
+            }
+        });
+    }
+
+    public void verifyPurchase(String purchaseToken, String productId, String packageName) {
+        loading.setValue(true);
+        VerifyPurchaseRequest req = new VerifyPurchaseRequest(purchaseToken, productId, packageName);
+        parentApi.verifyPurchase(req).enqueue(new Callback<SubscriptionStatusDto>() {
+            @Override
+            public void onResponse(@NonNull Call<SubscriptionStatusDto> call,
+                                   @NonNull Response<SubscriptionStatusDto> response) {
+                loading.postValue(false);
+                if (response.isSuccessful() && response.body() != null) {
+                    SubscriptionStatusDto status = response.body();
+                    session.savePremiumStatus(
+                            status.premium,
+                            status.subscriptionType,
+                            status.expiresAt);
+                    subscriptionStatus.postValue(status);
+                } else {
+                    error.postValue("Satın alma doğrulanamadı. Lütfen tekrar deneyin.");
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<SubscriptionStatusDto> call, @NonNull Throwable t) {
+                loading.postValue(false);
+                error.postValue("Bağlantı hatası: " + t.getMessage());
+            }
+        });
+    }
+
+    // ── FCM Token ─────────────────────────────────────────────────────────────
+
+    public void updateFcmToken(String fcmToken) {
+        parentApi.updateFcmToken(new FcmTokenRequest(fcmToken)).enqueue(new Callback<Void>() {
+            @Override
+            public void onResponse(@NonNull Call<Void> call, @NonNull Response<Void> response) {
+                if (response.isSuccessful()) {
+                    Log.d("FCM", "Ebeveyn FCM token backend'e kaydedildi: " + fcmToken);
+                } else {
+                    Log.e("FCM", "FCM token kaydedilemedi — HTTP " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<Void> call, @NonNull Throwable t) {
+                Log.e("FCM", "FCM token gönderilemedi: " + t.getMessage());
+            }
+        });
+    }
 
     // ── Children ──────────────────────────────────────────────────────────────
 
@@ -110,9 +196,9 @@ public class ParentViewModel extends AndroidViewModel {
         });
     }
 
-    public void addChild(String adi, String soyadi, String telefon, String mail) {
+    public void addChild(String adi, String soyadi) {
         loading.setValue(true);
-        parentApi.addChild(new AddChildRequest(adi, soyadi, telefon, mail))
+        parentApi.addChild(new AddChildRequest(adi, soyadi))
                 .enqueue(new Callback<ChildDto>() {
                     @Override
                     public void onResponse(@NonNull Call<ChildDto> call,
@@ -245,7 +331,7 @@ public class ParentViewModel extends AndroidViewModel {
         });
     }
 
-    public void acknowledgeAlert(String alertId) {
+    public void acknowledgeAlert(long alertId) {
         parentApi.acknowledgeAlert(alertId).enqueue(new Callback<Void>() {
             @Override
             public void onResponse(@NonNull Call<Void> call, @NonNull Response<Void> response) {
@@ -353,7 +439,8 @@ public class ParentViewModel extends AndroidViewModel {
             @Override
             public void onResponse(@NonNull Call<Void> call, @NonNull Response<Void> response) {
                 if (response.isSuccessful()) {
-                    loadGeofences(childId); // listeyi yenile
+                    deleteSuccess.postValue(true);
+                    loadGeofences(childId); // listeyi yenile → drawSavedZones haritayı günceller
                 } else {
                     error.postValue("Bölge silinemedi: " + response.code());
                 }
@@ -385,4 +472,6 @@ public class ParentViewModel extends AndroidViewModel {
                     }
                 });
     }
+
+
 }

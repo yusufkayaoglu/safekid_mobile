@@ -24,6 +24,9 @@ import com.safekid.mobile.service.LocationService;
 import com.safekid.mobile.service.LocationWorker;
 import com.safekid.mobile.session.SessionManager;
 
+import android.os.Handler;
+import android.os.Looper;
+
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -32,6 +35,21 @@ public class ChildActiveFragment extends Fragment {
 
     private FragmentChildActiveBinding binding;
     private SessionManager session;
+
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private final Runnable refreshLastSentRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (binding == null) return;
+            long lastSentAt = session.getLastLocationSentAt();
+            if (lastSentAt > 0) {
+                String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                        .format(new Date(lastSentAt));
+                binding.tvLastSent.setText("Son gönderim: " + time);
+            }
+            uiHandler.postDelayed(this, 5_000);
+        }
+    };
 
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(
@@ -66,6 +84,7 @@ public class ChildActiveFragment extends Fragment {
 
         checkPermissionsAndStart();
         observeWorkerState();
+        uiHandler.post(refreshLastSentRunnable);
     }
 
     // ── İzin & Başlatma ───────────────────────────────────────────────────────
@@ -119,7 +138,6 @@ public class ChildActiveFragment extends Fragment {
         LocationWorker.startNow(requireContext());
 
         binding.tvServiceStatus.setText("Konum gönderiliyor...");
-        updateLastSentTime();
     }
 
     // ── WorkManager Durum Takibi ──────────────────────────────────────────────
@@ -139,13 +157,10 @@ public class ChildActiveFragment extends Fragment {
                             binding.tvServiceStatus.setText("Konum alınıyor...");
                             break;
                         case ENQUEUED:
-                            // 30 saniye bekleniyor
                             binding.tvServiceStatus.setText("Konum gönderiliyor... (30sn)");
-                            updateLastSentTime();
                             break;
                         case SUCCEEDED:
                             binding.tvServiceStatus.setText("Konum gönderildi");
-                            updateLastSentTime();
                             break;
                         case FAILED:
                             binding.tvServiceStatus.setText("Gönderim başarısız, tekrar deniyor...");
@@ -157,12 +172,6 @@ public class ChildActiveFragment extends Fragment {
                             break;
                     }
                 });
-    }
-
-    private void updateLastSentTime() {
-        String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                .format(new Date());
-        binding.tvLastSent.setText("Son gönderim: " + time);
     }
 
     // ── Durdur / Çıkış ────────────────────────────────────────────────────────
@@ -184,6 +193,7 @@ public class ChildActiveFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        uiHandler.removeCallbacks(refreshLastSentRunnable);
         super.onDestroyView();
         binding = null;
     }

@@ -12,6 +12,16 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class ApiClient {
 
+    // ── 401 Unauthorized callback ─────────────────────────────────────────────
+    /** MainActivity tarafından set edilir; 401 gelince UI thread'de çağrılır. */
+    public interface OnUnauthorizedListener {
+        void onUnauthorized();
+    }
+    private static volatile OnUnauthorizedListener unauthorizedListener;
+    public static void setOnUnauthorizedListener(OnUnauthorizedListener l) {
+        unauthorizedListener = l;
+    }
+
     // Emülatör için 10.0.2.2 (host localhost), gerçek telefon için Tailscale IP
     private static final String BASE_URL_EMULATOR  = "http://10.0.2.2:8081/";
     private static final String BASE_URL_TAILSCALE = "http://100.76.3.112:8081/";
@@ -77,7 +87,12 @@ public class ApiClient {
                         Request req = chain.request().newBuilder()
                                 .header("Authorization", "Bearer " + token)
                                 .build();
-                        return chain.proceed(req);
+                        okhttp3.Response response = chain.proceed(req);
+                        if (response.code() == 401) {
+                            OnUnauthorizedListener l = unauthorizedListener;
+                            if (l != null) l.onUnauthorized();
+                        }
+                        return response;
                     })
                     .addInterceptor(logging)
                     .build();

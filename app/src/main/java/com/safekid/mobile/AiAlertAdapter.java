@@ -15,7 +15,7 @@ import java.util.List;
 public class AiAlertAdapter extends RecyclerView.Adapter<AiAlertAdapter.VH> {
 
     public interface OnAcknowledgeListener {
-        void onAcknowledge(String alertId);
+        void onAcknowledge(long alertId);
     }
 
     private final List<AlertDto> items = new ArrayList<>();

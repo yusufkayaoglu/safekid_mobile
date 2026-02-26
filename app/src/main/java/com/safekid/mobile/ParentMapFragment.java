@@ -1,21 +1,30 @@
 package com.safekid.mobile;
 
+import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
@@ -63,9 +72,29 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
     // childId → polygon listesi (bir çocuğun birden fazla bölgesi olabilir)
     private final Map<String, List<Polygon>> geofencePolygons = new HashMap<>();
 
+    private static final String TAG = "SSE_DEBUG";
+    private static final int RECONNECT_DELAY_INITIAL = 3_000;
+    private static final int RECONNECT_DELAY_MAX     = 30_000;
+
     private EventSource eventSource;
     private final Gson gson = new Gson();
     private final AtomicInteger notifCounter = new AtomicInteger(0);
+
+    private final Handler reconnectHandler = new Handler(Looper.getMainLooper());
+    private int reconnectDelay = RECONNECT_DELAY_INITIAL;
+
+    // Aynı breach eventinin reconnect sonrası tekrar gösterilmesini önler.
+    // Key: geofenceId + "_" + zaman
+    private final java.util.Set<String> seenBreachKeys = new java.util.HashSet<>();
+
+    private final ActivityResultLauncher<String> notifPermLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (!granted) {
+                    Toast.makeText(requireContext(),
+                            "Bildirim izni verilmedi — güvenli bölge uyarıları gösterilemez",
+                            Toast.LENGTH_LONG).show();
+                }
+            });
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -110,6 +139,7 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
         binding.fabGeofence.setOnClickListener(v -> openGeofenceDrawForChild());
 
         createNotificationChannel();
+        requestNotificationPermission();
     }
 
     // ── Map Ready ─────────────────────────────────────────────────────────────
@@ -134,6 +164,15 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
         viewModel.getMapChildren().observe(getViewLifecycleOwner(), this::updateMarkers);
         viewModel.loadMapChildren();
 
+        // Tüm çocukların geofence'lerini yükle — sadece haritada aktif olanlar değil
+        viewModel.getChildren().observe(getViewLifecycleOwner(), children -> {
+            if (children == null) return;
+            for (com.safekid.mobile.network.dto.ChildDto child : children) {
+                viewModel.loadGeofences(child.cocukUniqueId);
+            }
+        });
+        viewModel.loadChildren();
+
         // Geofence polygon'larını yükle (harita hazır olduktan sonra)
         viewModel.getGeofences().observe(getViewLifecycleOwner(), geofences -> {
             if (geofences == null || geofences.isEmpty()) return;
@@ -141,8 +180,14 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
             drawGeofencesForChild(childId, geofences);
         });
 
-        // SSE (her view yaşam döngüsünde yeniden bağlan)
-        startSse();
+        // SSE — sadece yeni harita instance'ında başlat, zaten bağlıysa tekrar bağlanma
+        if (isNewMap || eventSource == null) {
+            if (eventSource != null) {
+                eventSource.cancel();
+                eventSource = null;
+            }
+            startSse();
+        }
     }
 
     // ── Marker Yönetimi ───────────────────────────────────────────────────────
@@ -257,10 +302,11 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
 
     /** Tüm çocukların geofence'lerini yeniden yükler */
     private void refreshAllGeofences() {
-        List<MapChildDto> children = viewModel.getMapChildren().getValue();
+        List<com.safekid.mobile.network.dto.ChildDto> children =
+                viewModel.getChildren().getValue();
         if (children == null) return;
-        for (MapChildDto c : children) {
-            viewModel.loadGeofences(c.childId);
+        for (com.safekid.mobile.network.dto.ChildDto c : children) {
+            viewModel.loadGeofences(c.cocukUniqueId);
         }
     }
 
@@ -281,6 +327,8 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
                     @Override
                     public void onOpen(@NonNull EventSource source,
                                        @NonNull okhttp3.Response response) {
+                        Log.d(TAG, "SSE bağlantısı kuruldu");
+                        reconnectDelay = RECONNECT_DELAY_INITIAL; // başarılı bağlantıda sıfırla
                         runOnUi(() -> setSseStatus("Canlı", Color.GREEN));
                     }
 
@@ -289,8 +337,25 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
                                         @Nullable String id,
                                         @Nullable String type,
                                         @NonNull String data) {
-                        if ("geofence-breach".equals(type)) {
+                        Log.d(TAG, "onEvent → type=[" + type + "] | data=" + data);
+
+                        // Breach tespiti: önce SSE event: alanına bak, yoksa JSON type'a bak
+                        boolean isBreach = "geofence-breach".equals(type);
+                        if (!isBreach) {
+                            // Backend event: alanı göndermiyorsa JSON içinden kontrol et
+                            try {
+                                GeofenceBreachEvent candidate =
+                                        gson.fromJson(data, GeofenceBreachEvent.class);
+                                if (candidate != null
+                                        && "GEOFENCE_BREACH".equals(candidate.type)) {
+                                    isBreach = true;
+                                }
+                            } catch (Exception ignored) {}
+                        }
+
+                        if (isBreach) {
                             // ── Güvenli bölge ihlali ──────────────────────────
+                            Log.w(TAG, "GEOFENCE BREACH alındı! data=" + data);
                             GeofenceBreachEvent breach =
                                     gson.fromJson(data, GeofenceBreachEvent.class);
                             runOnUi(() -> handleGeofenceBreach(breach));
@@ -301,7 +366,9 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
                                 runOnUi(() -> {
                                     if (binding != null) addOrUpdateMarker(child);
                                 });
-                            } catch (Exception ignored) {}
+                            } catch (Exception e) {
+                                Log.e(TAG, "Konum parse hatası: " + e.getMessage());
+                            }
                         }
                     }
 
@@ -309,20 +376,74 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
                     public void onFailure(@NonNull EventSource source,
                                           @Nullable Throwable t,
                                           @Nullable okhttp3.Response response) {
-                        runOnUi(() -> setSseStatus("Bağlantı kesildi", Color.RED));
+                        // OkHttp SSE: sunucu stream'i kapattığında "Socket closed" ile
+                        // response=200 döner — bu bir hata değil, normal kapanma.
+                        boolean isNormalClose = response != null
+                                && response.code() == 200
+                                && t != null
+                                && "Socket closed".equals(t.getMessage());
+
+                        Log.d(TAG, "SSE onFailure! hata=" + (t != null ? t.getMessage() : "null")
+                                + " | response=" + (response != null ? response.code() : "null")
+                                + " | normalClose=" + isNormalClose);
+                        runOnUi(() -> {
+                            eventSource = null;
+                            if (isNormalClose) {
+                                // Sunucu normal kapattı: hızlıca yeniden bağlan, backoff sıfırla
+                                reconnectDelay = RECONNECT_DELAY_INITIAL;
+                                setSseStatus("Yeniden bağlanıyor...", Color.YELLOW);
+                                reconnectHandler.postDelayed(() -> {
+                                    if (isAdded() && binding != null && eventSource == null) {
+                                        startSse();
+                                    }
+                                }, 1_000);
+                            } else {
+                                setSseStatus("Bağlantı kesildi", Color.RED);
+                                scheduleReconnect();
+                            }
+                        });
                     }
 
                     @Override
                     public void onClosed(@NonNull EventSource source) {
-                        runOnUi(() -> setSseStatus("Kapalı", Color.GRAY));
+                        Log.d(TAG, "SSE kapandı, yeniden bağlanılacak");
+                        runOnUi(() -> {
+                            setSseStatus("Kapalı", Color.GRAY);
+                            eventSource = null;
+                            scheduleReconnect();
+                        });
                     }
                 });
+    }
+
+    /**
+     * SSE bağlantısı kopunca üstel geri çekilme ile yeniden bağlanır.
+     * Gecikme: 3s → 6s → 12s → ... → max 30s
+     */
+    private void scheduleReconnect() {
+        if (!isAdded() || binding == null) return;
+        Log.d(TAG, "Yeniden bağlanma planlandı: " + reconnectDelay + "ms sonra");
+        setSseStatus("Yeniden bağlanıyor...", Color.YELLOW);
+        reconnectHandler.postDelayed(() -> {
+            if (isAdded() && binding != null && eventSource == null) {
+                startSse();
+            }
+        }, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_DELAY_MAX);
     }
 
     // ── Geofence Breach Handling ───────────────────────────────────────────────
 
     private void handleGeofenceBreach(GeofenceBreachEvent breach) {
         if (breach == null || getContext() == null) return;
+
+        // Reconnect sonrası sunucunun replay ettiği eski breach eventlerini filtrele.
+        // geofenceId + zaman kombinasyonu unique bir anahtar oluşturur.
+        String breachKey = breach.geofenceId + "_" + breach.zaman;
+        if (!seenBreachKeys.add(breachKey)) {
+            Log.d(TAG, "Tekrar eden breach eventi atlandı: " + breachKey);
+            return;
+        }
 
         // 1. Yüksek öncelikli bildirim göster
         showBreachNotification(breach);
@@ -408,6 +529,16 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
         nm.createNotificationChannel(channel);
     }
 
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(requireContext(),
+                    Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+            }
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void setSseStatus(String text, int dotColor) {
@@ -426,10 +557,12 @@ public class ParentMapFragment extends Fragment implements OnMapReadyCallback {
 
     @Override
     public void onDestroyView() {
+        reconnectHandler.removeCallbacksAndMessages(null); // bekleyen reconnect'leri iptal et
         if (eventSource != null) {
             eventSource.cancel();
             eventSource = null;
         }
+        seenBreachKeys.clear();
         super.onDestroyView();
         binding = null;
     }

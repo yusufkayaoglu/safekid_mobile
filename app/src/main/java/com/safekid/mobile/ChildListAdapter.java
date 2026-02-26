@@ -59,7 +59,7 @@ public class ChildListAdapter extends RecyclerView.Adapter<ChildListAdapter.VH> 
 
         void bind(ChildDto child) {
             b.tvChildName.setText(child.getFullName());
-            b.tvChildLastSeen.setText(child.cocukMail != null ? child.cocukMail : "-");
+            b.tvChildLastSeen.setText("");
 
             b.btnDetail.setOnClickListener(v -> {
                 if (listener != null) listener.onDetailClick(child);

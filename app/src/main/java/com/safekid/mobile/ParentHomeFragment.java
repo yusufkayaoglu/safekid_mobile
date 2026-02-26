@@ -12,6 +12,8 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
+import com.google.android.gms.ads.AdRequest;
+import com.google.android.gms.ads.AdView;
 import com.safekid.mobile.databinding.FragmentParentHomeBinding;
 import com.safekid.mobile.network.dto.ChildDto;
 import com.safekid.mobile.session.SessionManager;
@@ -49,12 +51,38 @@ public class ParentHomeFragment extends Fragment {
 
         viewModel.refreshApiClient();
         viewModel.loadChildren();
+        viewModel.loadSubscriptionStatus();
+        setupBannerAd();
+    }
+
+    private void setupBannerAd() {
+        // Premium kullanıcılarda reklam gösterme
+        if (session.isPremium()) {
+            binding.adView.setVisibility(View.GONE);
+            return;
+        }
+        AdView adView = binding.adView;
+        AdRequest adRequest = new AdRequest.Builder().build();
+        adView.loadAd(adRequest);
     }
 
     private void setupToolbar() {
         String name = session.getParentName();
         if (name != null) {
             binding.tvWelcome.setText("Merhaba, " + name + "!");
+        }
+        binding.toolbar.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == R.id.action_premium) {
+                ((MainActivity) requireActivity()).loadFragment(new PremiumFragment(), true);
+                return true;
+            }
+            return false;
+        });
+        // Premium kullanıcıda butonu rozet olarak göster, değilse CTA
+        if (session.isPremium()) {
+            binding.toolbar.getMenu().findItem(R.id.action_premium).setTitle("⭐ Premium Üye");
+        } else {
+            binding.toolbar.getMenu().findItem(R.id.action_premium).setTitle("Premium'a Geç");
         }
     }
 
@@ -75,6 +103,14 @@ public class ParentHomeFragment extends Fragment {
 
         viewModel.getError().observe(getViewLifecycleOwner(), err -> {
             if (err != null) Toast.makeText(requireContext(), err, Toast.LENGTH_LONG).show();
+        });
+
+        // Abonelik durumu gelince reklamı kapat ve butonu güncelle
+        viewModel.getSubscriptionStatus().observe(getViewLifecycleOwner(), status -> {
+            if (status != null && status.premium) {
+                binding.adView.setVisibility(View.GONE);
+                binding.toolbar.getMenu().findItem(R.id.action_premium).setTitle("⭐ Premium Üye");
+            }
         });
     }
 
@@ -103,7 +139,7 @@ public class ParentHomeFragment extends Fragment {
 
     private void openChildDetail(ChildDto child) {
         ChildDetailFragment fragment = ChildDetailFragment.newInstance(
-                child.cocukUniqueId, child.getFullName(), child.cocukMail);
+                child.cocukUniqueId, child.getFullName());
         ((MainActivity) requireActivity()).loadFragment(fragment, true);
     }
 

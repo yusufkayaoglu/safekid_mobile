@@ -66,14 +66,11 @@ public class RegisterFragment extends Fragment {
             String userCode  = text(binding.etUserCode);
             String mail      = text(binding.etMail);
             String password  = text(binding.etPassword);
-            String telefon   = text(binding.etTelefon);
             String adres     = text(binding.etAdres);
-            String evTel     = text(binding.etEvTelefon);
             String isAdres   = text(binding.etIsAdresi);
 
             if (adi.isEmpty() || soyadi.isEmpty() || userCode.isEmpty()
-                    || mail.isEmpty() || password.isEmpty() || telefon.isEmpty()
-                    || adres.isEmpty()) {
+                    || mail.isEmpty() || password.isEmpty() || adres.isEmpty()) {
                 Toast.makeText(requireContext(),
                         "Zorunlu alanları doldurun", Toast.LENGTH_SHORT).show();
                 return;
@@ -82,15 +79,13 @@ public class RegisterFragment extends Fragment {
             pendingEmail = mail;
 
             RegisterRequest req = new RegisterRequest();
-            req.ebeveynAdi              = adi;
-            req.ebeveynSoyadi           = soyadi;
-            req.ebeveynUserCode         = userCode;
-            req.ebeveynMailAdres        = mail;
-            req.ebeveynPassword         = password;
-            req.ebeveynTelefonNumarasi  = telefon;
-            req.ebeveynAdres            = adres;
-            req.ebeveynEvTelefonNumarasi = evTel;
-            req.ebeveynIsAdresi         = isAdres;
+            req.ebeveynAdi      = adi;
+            req.ebeveynSoyadi   = soyadi;
+            req.ebeveynUserCode = userCode;
+            req.ebeveynMailAdres = mail;
+            req.ebeveynPassword = password;
+            req.ebeveynAdres    = adres;
+            req.ebeveynIsAdresi = isAdres;
 
             viewModel.register(req);
         });
