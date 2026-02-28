@@ -3,6 +3,7 @@ package com.safekid.mobile;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -61,11 +62,24 @@ public class QrLoginFragment extends Fragment {
                         }
                     });
 
-    // Konum izni launcher — verilsin ya da verilmesin, çocuk ekranına geç
+    // Adım 1: Fine + Coarse konum izni
     private final ActivityResultLauncher<String[]> locationPermissionLauncher =
             registerForActivityResult(
                     new ActivityResultContracts.RequestMultiplePermissions(),
-                    results -> navigateToChildActive());
+                    results -> {
+                        Boolean fineGranted = results.get(Manifest.permission.ACCESS_FINE_LOCATION);
+                        if (Boolean.TRUE.equals(fineGranted)) {
+                            requestBackgroundLocationOrNavigate();
+                        } else {
+                            navigateToChildActive();
+                        }
+                    });
+
+    // Adım 2: Arka plan konum izni (Android 10+ / API 29+)
+    private final ActivityResultLauncher<String> backgroundLocationPermissionLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.RequestPermission(),
+                    granted -> navigateToChildActive());
 
     @Nullable
     @Override
@@ -157,12 +171,24 @@ public class QrLoginFragment extends Fragment {
     private void requestLocationPermissionThenNavigate() {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
-            navigateToChildActive();
+            requestBackgroundLocationOrNavigate();
         } else {
             locationPermissionLauncher.launch(new String[]{
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION
             });
+        }
+    }
+
+    private void requestBackgroundLocationOrNavigate() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                && ContextCompat.checkSelfPermission(requireContext(),
+                        Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                        != PackageManager.PERMISSION_GRANTED) {
+            backgroundLocationPermissionLauncher.launch(
+                    Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+        } else {
+            navigateToChildActive();
         }
     }
 
