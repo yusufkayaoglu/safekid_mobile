@@ -23,6 +23,7 @@ import retrofit2.Response;
 public class SafeKidFcmService extends FirebaseMessagingService {
 
     private static final String CHANNEL_GEOFENCE = "geofence_breach";
+    private static final String CHANNEL_ANOMALY  = "anomaly_alerts";
     private static final int NOTIF_ID_BASE = 4000;
     private static final AtomicInteger notifCounter = new AtomicInteger(0);
 
@@ -71,6 +72,8 @@ public class SafeKidFcmService extends FirebaseMessagingService {
         String title;
         String body;
 
+        String type = message.getData().get("type");
+
         if (message.getNotification() != null) {
             title = message.getNotification().getTitle();
             body  = message.getNotification().getBody();
@@ -79,15 +82,18 @@ public class SafeKidFcmService extends FirebaseMessagingService {
             body  = message.getData().get("body");
         }
 
-        showNotification(title, body);
+        String channel = "anomaly_alert".equals(type) ? CHANNEL_ANOMALY : CHANNEL_GEOFENCE;
+        showNotification(title, body, channel);
     }
 
-    private void showNotification(String title, String body) {
+    private void showNotification(String title, String body, String channel) {
         NotificationManager nm = (NotificationManager)
                 getSystemService(Context.NOTIFICATION_SERVICE);
 
+        int color = CHANNEL_ANOMALY.equals(channel) ? Color.YELLOW : Color.RED;
+
         androidx.core.app.NotificationCompat.Builder builder =
-                new NotificationCompat.Builder(this, CHANNEL_GEOFENCE)
+                new NotificationCompat.Builder(this, channel)
                         .setSmallIcon(android.R.drawable.ic_dialog_alert)
                         .setContentTitle(title != null ? title : "SafeKid")
                         .setContentText(body)
@@ -95,7 +101,7 @@ public class SafeKidFcmService extends FirebaseMessagingService {
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setDefaults(NotificationCompat.DEFAULT_ALL)
                         .setAutoCancel(true)
-                        .setColor(Color.RED);
+                        .setColor(color);
 
         nm.notify(NOTIF_ID_BASE + notifCounter.incrementAndGet(), builder.build());
     }
