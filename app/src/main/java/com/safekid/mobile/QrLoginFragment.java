@@ -61,6 +61,12 @@ public class QrLoginFragment extends Fragment {
                         }
                     });
 
+    // Konum izni launcher — verilsin ya da verilmesin, çocuk ekranına geç
+    private final ActivityResultLauncher<String[]> locationPermissionLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.RequestMultiplePermissions(),
+                    results -> navigateToChildActive());
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -121,7 +127,7 @@ public class QrLoginFragment extends Fragment {
             session.saveChildLogin(res.accessToken, res.expiresAt,
                     res.ebeveynUniqueId, res.ebeveynAdi, res.ebeveynSoyadi);
             Toast.makeText(requireContext(), "Giriş başarılı!", Toast.LENGTH_SHORT).show();
-            ((MainActivity) requireActivity()).navigateToChildActive();
+            requestLocationPermissionThenNavigate();
         });
 
         viewModel.getError().observe(getViewLifecycleOwner(), err -> {
@@ -146,6 +152,22 @@ public class QrLoginFragment extends Fragment {
         } else {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
         }
+    }
+
+    private void requestLocationPermissionThenNavigate() {
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            navigateToChildActive();
+        } else {
+            locationPermissionLauncher.launch(new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+            });
+        }
+    }
+
+    private void navigateToChildActive() {
+        ((MainActivity) requireActivity()).navigateToChildActive();
     }
 
     private void launchQrScanner() {
