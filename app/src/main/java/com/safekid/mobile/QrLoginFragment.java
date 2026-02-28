@@ -3,7 +3,9 @@ package com.safekid.mobile;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -185,8 +187,26 @@ public class QrLoginFragment extends Fragment {
                 && ContextCompat.checkSelfPermission(requireContext(),
                         Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                         != PackageManager.PERMISSION_GRANTED) {
-            backgroundLocationPermissionLauncher.launch(
-                    Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // Android 11+: sistem in-app dialog göstermiyor, ayarlara yönlendirmek gerekiyor
+                new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                        .setTitle("Arka Plan Konum İzni")
+                        .setMessage("Konum takibinin arka planda çalışabilmesi için Ayarlar'da "
+                                + "konum iznini \"Her zaman izin ver\" olarak ayarlayın.")
+                        .setPositiveButton("Ayarları Aç", (d, w) -> {
+                            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", requireContext().getPackageName(), null));
+                            startActivity(intent);
+                            navigateToChildActive();
+                        })
+                        .setNegativeButton("Şimdi Değil", (d, w) -> navigateToChildActive())
+                        .setCancelable(false)
+                        .show();
+            } else {
+                // Android 10: normal permission dialog çalışıyor
+                backgroundLocationPermissionLauncher.launch(
+                        Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+            }
         } else {
             navigateToChildActive();
         }
