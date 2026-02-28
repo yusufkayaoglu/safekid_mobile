@@ -65,6 +65,9 @@ public class SafeKidFcmService extends FirebaseMessagingService {
      */
     @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
+        // Sadece ebeveyn rolündeki cihazda bildirim göster
+        if (!session().isParent()) return;
+
         String title;
         String body;
 

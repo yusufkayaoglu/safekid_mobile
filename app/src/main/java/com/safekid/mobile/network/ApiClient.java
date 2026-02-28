@@ -22,26 +22,13 @@ public class ApiClient {
         unauthorizedListener = l;
     }
 
-    // Emülatör için 10.0.2.2 (host localhost), gerçek telefon için Tailscale IP
-    private static final String BASE_URL_EMULATOR  = "http://10.0.2.2:8081/";
-    private static final String BASE_URL_TAILSCALE = "http://100.76.3.112:8081/";
+    // Railway production backend
+    private static final String BASE_URL_PRODUCTION = "https://safekid-production.up.railway.app/";
 
-    public static final String BASE_URL = isEmulator() ? BASE_URL_EMULATOR : BASE_URL_TAILSCALE;
+    public static final String BASE_URL = BASE_URL_PRODUCTION;
 
     static {
-        Log.d("ApiClient", "BASE_URL seçildi: " + BASE_URL
-                + " | HARDWARE=" + android.os.Build.HARDWARE
-                + " | PRODUCT=" + android.os.Build.PRODUCT);
-    }
-
-    private static boolean isEmulator() {
-        return android.os.Build.HARDWARE.equals("goldfish")
-                || android.os.Build.HARDWARE.equals("ranchu")
-                || android.os.Build.FINGERPRINT.contains("generic")
-                || android.os.Build.PRODUCT.startsWith("sdk")
-                || android.os.Build.PRODUCT.contains("emulator")
-                || android.os.Build.MODEL.contains("Emulator")
-                || android.os.Build.MODEL.contains("Android SDK");
+        Log.d("ApiClient", "BASE_URL: " + BASE_URL);
     }
 
     private static Retrofit publicRetrofit;

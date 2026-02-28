@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdView;
 import com.safekid.mobile.databinding.FragmentParentHomeBinding;
+import com.safekid.mobile.service.AnomalyWorker;
 import com.safekid.mobile.network.dto.ChildDto;
 import com.safekid.mobile.session.SessionManager;
 import com.safekid.mobile.viewmodel.ParentViewModel;
@@ -53,6 +54,8 @@ public class ParentHomeFragment extends Fragment {
         viewModel.loadChildren();
         viewModel.loadSubscriptionStatus();
         setupBannerAd();
+
+        AnomalyWorker.start(requireContext());
     }
 
     private void setupBannerAd() {

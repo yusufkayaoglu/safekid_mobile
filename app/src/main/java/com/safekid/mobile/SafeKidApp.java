@@ -51,6 +51,17 @@ public class SafeKidApp extends Application implements Configuration.Provider {
             channel.enableVibration(true);
             nm.createNotificationChannel(channel);
         }
+        if (nm.getNotificationChannel("anomaly_alerts") == null) {
+            NotificationChannel anomalyChannel = new NotificationChannel(
+                    "anomaly_alerts",
+                    "Anomali Uyarıları",
+                    NotificationManager.IMPORTANCE_HIGH);
+            anomalyChannel.setDescription("Çocuğun anormal davranışı tespit edildiğinde bildirim gönderilir.");
+            anomalyChannel.enableLights(true);
+            anomalyChannel.setLightColor(Color.YELLOW);
+            anomalyChannel.enableVibration(true);
+            nm.createNotificationChannel(anomalyChannel);
+        }
     }
 
     @NonNull
