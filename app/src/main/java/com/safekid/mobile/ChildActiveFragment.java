@@ -51,12 +51,17 @@ public class ChildActiveFragment extends Fragment {
         }
     };
 
+    private boolean trackingStarted = false;
+
     private final ActivityResultLauncher<String[]> permissionLauncher =
             registerForActivityResult(
                     new ActivityResultContracts.RequestMultiplePermissions(),
                     result -> {
-                        boolean fineGranted = Boolean.TRUE.equals(
-                                result.get(Manifest.permission.ACCESS_FINE_LOCATION));
+                        // Bazı cihazlarda zaten verilmiş izinler result'ta null gelebilir,
+                        // bu yüzden result yerine gerçek izin durumunu kontrol ediyoruz.
+                        boolean fineGranted = ContextCompat.checkSelfPermission(requireContext(),
+                                Manifest.permission.ACCESS_FINE_LOCATION)
+                                == PackageManager.PERMISSION_GRANTED;
                         if (fineGranted) {
                             startTracking();
                         } else {
@@ -129,6 +134,9 @@ public class ChildActiveFragment extends Fragment {
      *    Bu nedenle LocationWorker OneTimeWorkRequest zinciri kullanır (30sn gecikme).
      */
     private void startTracking() {
+        if (trackingStarted) return;
+        trackingStarted = true;
+
         // 1. Mevcut ForegroundService'i başlat (30sn GPS — anlık güncelleme)
         Intent intent = new Intent(requireContext(), LocationService.class);
         intent.putExtra(LocationService.EXTRA_TOKEN, session.getToken());
@@ -189,6 +197,15 @@ public class ChildActiveFragment extends Fragment {
         Intent intent = new Intent(requireContext(), MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Settings'ten döndükten sonra izin verilmişse takibi başlat
+        if (!trackingStarted) {
+            checkPermissionsAndStart();
+        }
     }
 
     @Override
